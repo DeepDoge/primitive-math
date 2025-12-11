@@ -15,7 +15,7 @@ export class N {
 	public readonly value: bigint;
 	public readonly deferred: readonly OP[];
 
-	constructor(value: bigint, deferred: readonly OP[] = []) {
+	public constructor(value: bigint, deferred: readonly OP[] = []) {
 		if (value < 0n) {
 			// DEBUG: This should never happen
 			throw new Error("Negative values are impossible");
@@ -105,7 +105,7 @@ export class ADD extends OP {
 	public readonly name: string;
 	private readonly b: N;
 
-	constructor(b: N) {
+	public constructor(b: N) {
 		super();
 		this.b = b;
 		this.name = `ADD(${b})`;
@@ -129,7 +129,7 @@ export class SUB extends OP {
 	public readonly name: string;
 	private readonly b: N;
 
-	constructor(b: N) {
+	public constructor(b: N) {
 		super();
 		this.b = b;
 		this.name = `SUB(${b})`;
@@ -152,7 +152,7 @@ export class MUL extends OP {
 	public readonly name: string;
 	private readonly b: N;
 
-	constructor(b: N) {
+	public constructor(b: N) {
 		super();
 		this.b = b;
 		this.name = `MUL(${b})`;
@@ -173,7 +173,7 @@ export class DIV extends OP {
 	public readonly name: string;
 	private readonly b: N;
 
-	constructor(b: N) {
+	public constructor(b: N) {
 		super();
 		this.b = b;
 		this.name = `DIV(${b})`;

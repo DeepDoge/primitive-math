@@ -9,5 +9,15 @@
 		"indentWidth": 4,
 		"useTabs": true,
 		"lineWidth": 120
+	},
+	"lint": {
+		"plugins": ["./lint.ts"],
+		"rules": {
+			"include": [
+				"strict-oop/explicit-access-modifiers",
+				"strict-oop/require-override",
+				"strict-oop/no-access-widening"
+			]
+		}
 	}
 }
