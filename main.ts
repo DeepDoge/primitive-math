@@ -48,11 +48,6 @@ export class N {
 
 		// evaluate deferred operations first
 		let n = this as N;
-		/* 	while (n.deferred.length > 0) {
-			const [first, ...rest] = n.deferred;
-			n = new N(n.value, rest);
-			n = first.execute(n);
-		} */
 
 		// now execute the current operation
 		const result = operation.execute(n);
@@ -102,7 +97,12 @@ export class ADD extends OP {
 
 	public execute(a: N): N {
 		let b = this.b;
-
+		if (a.value === 0n) {
+			return new N(b.value, [...a.deferred, ...b.deferred]);
+		}
+		if (b.value === 0n) {
+			return new N(a.value, [...a.deferred, ...b.deferred]);
+		}
 		while (b.value > 0n) {
 			a = a.op(INC);
 			b = b.op(DEC);
