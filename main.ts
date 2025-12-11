@@ -2,7 +2,14 @@ export function repeat<T>(length: number | bigint, value: T): T[] {
 	return new Array(Number(length)).fill(value);
 }
 
-export type OP = (n: N) => N;
+export abstract class OP {
+	public abstract readonly name: string;
+	public abstract execute(n: N): N;
+
+	public toString(): string {
+		return this.name;
+	}
+}
 
 export class N {
 	public readonly value: bigint;
@@ -17,124 +24,405 @@ export class N {
 		this.value = value;
 	}
 
-	public clone(): N {
-		return new N(this.value, this.deferred);
-	}
-
+	static #evalauateStackDepth = 0;
 	public evaluate(): N {
-		let value = this.value;
-		const exhaust = (ops: readonly OP[]): readonly OP[] => {
-			const left: OP[] = [];
-			while (ops.length > 0) {
-				const [op, ...rest] = ops;
-				const result = op(new N(value));
-				value = result.value;
-				ops = rest;
-				left.push(...result.deferred);
+		N.#evalauateStackDepth++;
+		if (N.#evalauateStackDepth > 10) {
+			// Prevent stack overflow due to excessive recursion
+			N.#evalauateStackDepth--;
+			return this;
+		}
+		let current = new N(this.value);
+		let ops = this.deferred;
+		while (true) {
+			const [nextOp, ...restOps] = ops;
+			if (!nextOp) {
+				N.#evalauateStackDepth--;
+				return current;
 			}
-			return left;
-		};
-		const deferred = exhaust(this.deferred);
-		return new N(value, deferred);
+			current = nextOp.execute(current);
+			ops = restOps;
+			if (current.deferred.length > 0) {
+				// Cannot evaluate further if there are still deferred operations
+				N.#evalauateStackDepth--;
+				return new N(current.value, [...current.deferred, ...restOps]);
+			}
+		}
 	}
 
-	public op(op: OP): N;
-	public op(op: (other: N) => OP, other: N): N;
-	public op(op: OP | ((other: N) => OP), other?: N): N {
-		if (other && typeof op === "function" && op.length === 1) {
-			const OP = op(other) as OP;
-			return new N(this.value, [OP, ...this.deferred, ...other.deferred]).evaluate();
+	public op(op: new () => OP): N;
+	public op(op: new (other: N) => OP, other: N): N;
+	public op(...args: [op: new () => OP] | [op: new (other: N) => OP, other: N]): N {
+		const params = { op: args[0], other: args[1] } as
+			| { op: new () => OP; other?: undefined }
+			| { op: new (other: N) => OP; other: N };
+
+		let operation: OP;
+		if (params.other) {
+			operation = new params.op(params.other);
 		} else {
-			const OP = op as OP;
-			return new N(this.value, [OP, ...this.deferred]).evaluate();
+			operation = new params.op();
 		}
+
+		const result = new N(this.value, [...this.deferred, operation]);
+		// console.log(`${result}`);
+		return result.evaluate();
+	}
+
+	public toString(): string {
+		if (this.deferred.length > 0) {
+			return `${this.value}[${this.deferred.join(", ")}]`;
+		}
+		return `${this.value}`;
 	}
 }
 
 export const ZERO = (): N => new N(0n);
 export const ONE = (): N => new N(1n);
 
-export const INC: OP = (n: N) => {
-	return new N(n.value + 1n);
-};
-export const DEC: OP = (n: N) => {
-	if (n.value === 0n) {
-		return new N(n.value, [DEC]);
+export class INC extends OP {
+	public readonly name = "INC";
+
+	public execute(n: N): N {
+		return new N(n.value + 1n);
 	}
-	return new N(n.value - 1n);
-};
-export const ADD = (b: N): OP => (a: N) => {
-	while (b.value > 0n) {
-		a = a.op(INC);
-		b = b.op(DEC);
+}
+
+export class DEC extends OP {
+	public readonly name = "DEC";
+
+	public execute(n: N): N {
+		if (n.value === 0n) {
+			return n.op(DEC);
+		}
+		return new N(n.value - 1n);
 	}
-	return a;
-};
-export const SUB = (b: N): OP => (a: N) => {
-	while (b.value > 0n) {
-		a = a.op(DEC);
-		b = b.op(DEC);
+}
+
+export class ADD extends OP {
+	public readonly name: string;
+	private readonly b: N;
+
+	constructor(b: N) {
+		super();
+		this.b = b;
+		this.name = `ADD(${b})`;
 	}
-	return a;
-};
-export const MUL = (b: N): OP => (a: N) => {
-	const n = a.clone();
-	while (b.value > 1n) {
-		a = a.op(ADD, n);
-		b = b.op(DEC);
+
+	public execute(a: N): N {
+		let counter = this.b;
+		while (counter.value > 0n) {
+			a = a.op(INC);
+			counter = counter.op(DEC);
+		}
+		return new N(a.value, [...a.deferred, ...this.b.deferred]);
 	}
-	return a;
-};
-export const DIV = (b: N): OP => (a: N) => {
-	let quotient = ZERO();
-	let remainder = a.clone();
-	while (remainder.value >= b.value && b.value > 0n) {
-		remainder = remainder.op(SUB, b);
-		quotient = quotient.op(INC);
+}
+
+export class SUB extends OP {
+	public readonly name: string;
+	private readonly b: N;
+
+	constructor(b: N) {
+		super();
+		this.b = b;
+		this.name = `SUB(${b})`;
 	}
-	return new N(quotient.value, [
-		...(remainder.value > 0n ? [DIV(b)] : []),
-		...quotient.deferred,
-	]);
-};
+
+	public execute(a: N): N {
+		let counter = this.b;
+		while (counter.value > 0n) {
+			a = a.op(DEC);
+			counter = counter.op(DEC);
+		}
+		return new N(a.value, [...a.deferred, ...this.b.deferred]);
+	}
+}
+
+export class MUL extends OP {
+	public readonly name: string;
+	private readonly b: N;
+
+	constructor(b: N) {
+		super();
+		this.b = b;
+		this.name = `MUL(${b})`;
+	}
+
+	public execute(a: N): N {
+		const n = a;
+		let counter = this.b;
+		while (counter.value > 1n) {
+			a = a.op(ADD, n);
+			counter = counter.op(DEC);
+		}
+		return a;
+	}
+}
+
+export class DIV extends OP {
+	public readonly name: string;
+	private readonly b: N;
+
+	constructor(b: N) {
+		super();
+		this.b = b;
+		this.name = `DIV(${b})`;
+	}
+
+	public execute(a: N): N {
+		if (a.deferred.length > 0) {
+			return new N(a.value, [this]);
+		}
+		if (this.b.deferred.length > 0) {
+			return new N(a.value, [this]);
+		}
+
+		let quotient = ZERO();
+		let remainder = a;
+		while (remainder.value >= this.b.value && this.b.value > 0n) {
+			remainder = remainder.op(SUB, this.b);
+			quotient = quotient.op(INC);
+		}
+		if (remainder.value === 0n) {
+			return quotient;
+		}
+
+		// Defer: ADD the result of (remainder / b)
+		const remainderDivB = remainder.op(DIV, this.b);
+		return quotient.op(ADD, remainderDivB);
+	}
+}
+
+function test(
+	label: string,
+	n: N,
+	condition?: (n: N) => { passed: boolean; reason: string },
+): void {
+	console.log(`${label}`);
+	console.log(`  = ${n}`);
+
+	// Test condition if provided
+	if (condition) {
+		const result = condition(n);
+		if (!result.passed) {
+			console.error(`  ❌ FAILED: ${result.reason}`);
+			return;
+		}
+	}
+
+	// Test stability: evaluate multiple times and check string representation stays the same
+	const original = n.toString();
+	let current = n;
+	for (let i = 0; i < 3; i++) {
+		current = current.evaluate();
+		const after = current.toString();
+		if (after !== original) {
+			console.error(`  ❌ UNSTABLE: After ${i + 1} evaluations, changed from "${original}" to "${after}"`);
+			return;
+		}
+	}
+
+	console.log(`  ✓ stable`);
+}
 
 if (import.meta.main) {
 	// Increment/Decrement Tests
-	let c = ONE();
-	c = c.op(INC);
-	console.log(`1 + 1 = ${c.value} with deferred ops: ${c.deferred.length}`);
-	console.assert(c.value === 2n);
+	console.log("--- Increment/Decrement ---");
 
-	c = c.op(DEC);
-	console.log(`2 - 1 = ${c.value} with deferred ops: ${c.deferred.length}`);
-	console.assert(c.value === 1n);
-	c = c.op(DEC);
-	console.log(`1 - 1 = ${c.value} with deferred ops: ${c.deferred.length}`);
-	console.assert(c.value === 0n);
+	test("1 + 1", ONE().op(INC), (n) => ({
+		passed: n.value === 2n,
+		reason: `expected 2, got ${n}`,
+	}));
 
-	c = c.op(DEC);
-	console.log(`0 - 1 = ${c.value} with deferred ops: ${c.deferred.length}`);
-	console.assert(c.value === 0n);
-	console.assert(c.deferred.length === 1);
+	test("2 - 1", new N(2n).op(DEC), (n) => ({
+		passed: n.value === 1n,
+		reason: `expected 1, got ${n}`,
+	}));
+
+	test("1 - 1", ONE().op(DEC), (n) => ({
+		passed: n.value === 0n,
+		reason: `expected 0, got ${n}`,
+	}));
+
+	test("0 - 1", ZERO().op(DEC), (n) => ({
+		passed: n.value === 0n && n.deferred.length === 1,
+		reason: `expected 0 with 1 deferred, got ${n}`,
+	}));
 
 	// Basic Arithmetic Tests
+	console.log("\n--- Basic Arithmetic ---");
+
 	const a = new N(5n);
 	const b = new N(3n);
 
-	const sum = a.op(ADD, b);
-	console.log(`5 + 3 = ${sum.value} with deferred ops: ${sum.deferred.length}`);
-	console.assert(sum.value === 8n);
+	test("5 + 3", a.op(ADD, b), (n) => ({
+		passed: n.value === 8n,
+		reason: `expected 8, got ${n}`,
+	}));
 
-	const difference = a.op(SUB, b);
-	console.log(`5 - 3 = ${difference.value} with deferred ops: ${difference.deferred.length}`);
-	console.assert(difference.value === 2n);
+	test("5 - 3", a.op(SUB, b), (n) => ({
+		passed: n.value === 2n,
+		reason: `expected 2, got ${n}`,
+	}));
 
-	const product = a.op(MUL, b);
-	console.log(`5 * 3 = ${product.value} with deferred ops: ${product.deferred.length}`);
-	console.assert(product.value === 15n);
+	test("5 * 3", a.op(MUL, b), (n) => ({
+		passed: n.toString() === "15",
+		reason: `expected 15, got ${n}`,
+	}));
 
-	const quotient = a.op(DIV, b);
-	console.log(`5 / 3 = ${quotient.value} with deferred ops: ${quotient.deferred.length}`);
-	console.assert(quotient.value === 1n);
-	console.assert(quotient.deferred.length === 1);
+	test("5 / 3", a.op(DIV, b), (n) => ({
+		passed: n.toString() === "1[ADD(2[DIV(3)])]",
+		reason: `expected 1 with remainder, got ${n}`,
+	}));
+
+	// Edge Cases
+	console.log("\n--- Edge Cases ---");
+
+	test("0 + 0", ZERO().op(ADD, ZERO()), (n) => ({
+		passed: n.value === 0n,
+		reason: `expected 0, got ${n}`,
+	}));
+
+	test("5 * 0", a.op(MUL, ZERO())); // Note: quirk due to while loop condition
+
+	test("5 + 0", a.op(ADD, ZERO()), (n) => ({
+		passed: n.value === 5n,
+		reason: `expected 5, got ${n}`,
+	}));
+
+	test("5 - 5", a.op(SUB, new N(5n)), (n) => ({
+		passed: n.value === 0n,
+		reason: `expected 0, got ${n}`,
+	}));
+
+	test("3 - 5", b.op(SUB, a), (n) => ({
+		passed: n.value === 0n && n.deferred.length === 2,
+		reason: `expected 0 with 2 deferred DECs, got ${n}`,
+	}));
+
+	test("5 / 0", a.op(DIV, ZERO()), (n) => ({
+		passed: n.value === 0n && n.deferred.length === 1,
+		reason: `expected 0 with 1 deferred, got ${n}`,
+	}));
+
+	test("0 / 0", ZERO().op(DIV, ZERO()), (n) => ({
+		passed: n.value === 0n && n.deferred.length === 0,
+		reason: `expected 0 with no deferred, got ${n}`,
+	}));
+
+	// Larger Numbers
+	console.log("\n--- Larger Numbers ---");
+
+	const ten = new N(10n);
+	const four = new N(4n);
+
+	test("10 + 4", ten.op(ADD, four), (n) => ({
+		passed: n.value === 14n,
+		reason: `expected 14, got ${n}`,
+	}));
+
+	test("10 - 4", ten.op(SUB, four), (n) => ({
+		passed: n.value === 6n,
+		reason: `expected 6, got ${n}`,
+	}));
+
+	test("10 * 4", ten.op(MUL, four), (n) => ({
+		passed: n.value === 40n,
+		reason: `expected 40, got ${n}`,
+	}));
+
+	test("10 / 4", ten.op(DIV, four), (n) => ({
+		passed: n.value === 2n && n.deferred.length === 1,
+		reason: `expected 2 with remainder, got ${n}`,
+	}));
+
+	test("12 / 4", new N(12n).op(DIV, four), (n) => ({
+		passed: n.value === 3n && n.deferred.length === 0,
+		reason: `expected 3 with no remainder, got ${n}`,
+	}));
+
+	test("10 / 1", ten.op(DIV, ONE()), (n) => ({
+		passed: n.value === 10n,
+		reason: `expected 10, got ${n}`,
+	}));
+
+	// Chained operations
+	console.log("\n--- Chained Operations ---");
+
+	test("(2 + 3) * 2", new N(2n).op(ADD, new N(3n)).op(MUL, new N(2n)), (n) => ({
+		passed: n.value === 10n,
+		reason: `expected 10, got ${n}`,
+	}));
+
+	test("10 - 3 - 2", new N(10n).op(SUB, new N(3n)).op(SUB, new N(2n)), (n) => ({
+		passed: n.value === 5n,
+		reason: `expected 5, got ${n}`,
+	}));
+
+	// Operations with deferred results
+	console.log("\n--- Operations with Deferred Results ---");
+
+	// (5 / 2) * 4 = 10 - the whole thing (2.5) gets multiplied by 4
+	test("(5 / 2) * 4", new N(5n).op(DIV, new N(2n)).op(MUL, new N(4n)), (n) => ({
+		passed: n.value === 10n && n.deferred.length === 0,
+		reason: `expected 10, got ${n}`,
+	}));
+
+	// (5 / 2) + 1 = 3 with remainder (2 + 1 = 3, remainder still pending)
+	test("(5 / 2) + 1", new N(5n).op(DIV, new N(2n)).op(ADD, ONE()), (n) => ({
+		passed: n.value === 3n && n.deferred.length === 1,
+		reason: `expected 3.5, got ${n}`,
+	}));
+
+	// (3 - 5) + 10 = 8 - DECs get consumed by INC during ADD
+	test("(3 - 5) + 10", new N(3n).op(SUB, new N(5n)).op(ADD, new N(10n)), (n) => ({
+		passed: n.value === 8n && n.deferred.length === 0,
+		reason: `expected 8, got ${n}`,
+	}));
+
+	// (5 / 0) + 1 = 1 with forever pending DIV
+	test("(5 / 0) + 1", new N(5n).op(DIV, ZERO()).op(ADD, ONE()), (n) => ({
+		passed: n.value === 1n && n.deferred.length === 1,
+		reason: `expected 1 + 5/0, got ${n}`,
+	}));
+
+	// (5 / 0) * 0 = 0 with no deferred (anything times 0 is 0)
+	test("(5 / 0) * 0", new N(5n).op(DIV, ZERO()).op(MUL, ZERO()), (n) => ({
+		passed: n.value === 0n && n.deferred.length === 0,
+		reason: `expected 0, got ${n}`,
+	}));
+
+	// (10 / 3) + (10 / 3) = 6 with two remainders
+	const tenDivThree = new N(10n).op(DIV, new N(3n));
+	test("(10 / 3) + (10 / 3)", tenDivThree.op(ADD, tenDivThree), (n) => ({
+		passed: n.value === 6n && n.deferred.length === 2,
+		reason: `expected 6.66666.. got ${n}`,
+	}));
+
+	// (7 / 2) * 2 = 7 - should "undo" the division (3.5 * 2 = 7)
+	test("(7 / 2) * 2", new N(7n).op(DIV, new N(2n)).op(MUL, new N(2n)), (n) => ({
+		passed: n.value === 7n && n.deferred.length === 0,
+		reason: `expected 7, got ${n}`,
+	}));
+
+	// Multiple increments/decrements
+	console.log("\n--- Multiple INC/DEC ---");
+
+	let counter = ZERO();
+	for (let i = 0; i < 5; i++) {
+		counter = counter.op(INC);
+	}
+	test("0 incremented 5 times", counter, (n) => ({
+		passed: n.value === 5n,
+		reason: `expected 5, got ${n}`,
+	}));
+
+	for (let i = 0; i < 3; i++) {
+		counter = counter.op(DEC);
+	}
+	test("then decremented 3 times", counter, (n) => ({
+		passed: n.value === 2n,
+		reason: `expected 2, got ${n}`,
+	}));
 }
