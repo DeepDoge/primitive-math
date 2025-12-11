@@ -24,51 +24,40 @@ export class N {
 		this.value = value;
 	}
 
-	static #evalauateStackDepth = 0;
-	public evaluate(): N {
-		N.#evalauateStackDepth++;
-		if (N.#evalauateStackDepth > 10) {
-			// Prevent stack overflow due to excessive recursion
-			N.#evalauateStackDepth--;
-			return this;
-		}
-		let current = new N(this.value);
-		let ops = this.deferred;
-		while (true) {
-			const [nextOp, ...restOps] = ops;
-			if (!nextOp) {
-				N.#evalauateStackDepth--;
-				return current;
-			}
-			current = nextOp.execute(current);
-			ops = restOps;
-			if (current.deferred.length > 0) {
-				// Cannot evaluate further if there are still deferred operations
-				N.#evalauateStackDepth--;
-				return new N(current.value, [...current.deferred, ...restOps]);
-			}
-		}
-	}
-
+	static #opStackDepth = 0;
 	public op(op: new () => OP): N;
 	public op(op: new (other: N) => OP, other: N): N;
 	public op(...args: [op: new () => OP] | [op: new (other: N) => OP, other: N]): N {
+		N.#opStackDepth++;
 		const params = { op: args[0], other: args[1] } as
 			| { op: new () => OP; other?: undefined }
 			| { op: new (other: N) => OP; other: N };
 
-		let operation: OP | undefined;
+		let operation: OP;
 		if (params.other) {
 			operation = new params.op(params.other);
 		} else {
 			operation = new params.op();
 		}
 
-		if (!operation) {
-			return this.evaluate();
+		if (N.#opStackDepth > 10) {
+			// Prevent stack overflow due to excessive recursion
+			N.#opStackDepth--;
+			return new N(this.value, [...this.deferred, operation]);
 		}
 
-		return new N(this.value, [...this.deferred, operation]).evaluate();
+		// evaluate deferred operations first
+		let n = this as N;
+		/* 	while (n.deferred.length > 0) {
+			const [first, ...rest] = n.deferred;
+			n = new N(n.value, rest);
+			n = first.execute(n);
+		} */
+
+		// now execute the current operation
+		const result = operation.execute(n);
+		N.#opStackDepth--;
+		return result;
 	}
 
 	public toString(): string {
@@ -159,13 +148,13 @@ export class MUL extends OP {
 	}
 
 	public execute(a: N): N {
-		const n = a;
+		let total = ZERO();
 		let counter = this.b;
-		while (counter.value > 1n) {
-			a = a.op(ADD, n);
+		while (counter.value > 0n) {
+			total = total.op(ADD, a);
 			counter = counter.op(DEC);
 		}
-		return a;
+		return total;
 	}
 }
 
@@ -197,28 +186,14 @@ export class DIV extends OP {
 function test(
 	label: string,
 	n: N,
-	condition?: (n: N) => { passed: boolean; reason: string },
+	condition: (n: N) => { passed: boolean; reason: string },
 ): void {
 	console.log(`${label} => ${n}`);
 
-	// Test condition if provided
-	if (condition) {
-		const result = condition(n);
-		if (!result.passed) {
-			console.error(`  ❌ FAILED: ${result.reason}`);
-			return;
-		}
-	}
-
-	// Test stability: evaluate multiple times and check string representation stays the same
-	const original = n.toString();
-	let current = n;
-	for (let i = 0; i < 3; i++) {
-		current = current.evaluate();
-		const after = current.toString();
-		if (after !== original) {
-			console.error(`  ❌ UNSTABLE: After ${i + 1} evaluations, changed from "${original}" to "${after}"`);
-		}
+	const result = condition(n);
+	if (!result.passed) {
+		console.error(`  ❌ FAILED: ${result.reason}`);
+		return;
 	}
 }
 
@@ -280,7 +255,10 @@ if (import.meta.main) {
 		reason: `expected 0, got ${n}`,
 	}));
 
-	test("5 * 0", a.op(MUL, ZERO())); // Note: quirk due to while loop condition
+	test("5 * 0", a.op(MUL, ZERO()), (n) => ({
+		passed: n.value === 0n,
+		reason: `expected 0, got ${n}`,
+	}));
 
 	test("5 + 0", a.op(ADD, ZERO()), (n) => ({
 		passed: n.value === 5n,
