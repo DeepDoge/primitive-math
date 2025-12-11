@@ -57,16 +57,18 @@ export class N {
 			| { op: new () => OP; other?: undefined }
 			| { op: new (other: N) => OP; other: N };
 
-		let operation: OP;
+		let operation: OP | undefined;
 		if (params.other) {
 			operation = new params.op(params.other);
 		} else {
 			operation = new params.op();
 		}
 
-		const result = new N(this.value, [...this.deferred, operation]);
-		// console.log(`${result}`);
-		return result.evaluate();
+		if (!operation) {
+			return this.evaluate();
+		}
+
+		return new N(this.value, [...this.deferred, operation]).evaluate();
 	}
 
 	public toString(): string {
@@ -84,7 +86,7 @@ export class INC extends OP {
 	public readonly name = "INC";
 
 	public execute(n: N): N {
-		return new N(n.value + 1n);
+		return new N(n.value + 1n, n.deferred);
 	}
 }
 
@@ -95,7 +97,7 @@ export class DEC extends OP {
 		if (n.value === 0n) {
 			return n.op(DEC);
 		}
-		return new N(n.value - 1n);
+		return new N(n.value - 1n, n.deferred);
 	}
 }
 
@@ -110,12 +112,16 @@ export class ADD extends OP {
 	}
 
 	public execute(a: N): N {
-		let counter = this.b;
-		while (counter.value > 0n) {
+		let b = this.b;
+
+		while (b.value > 0n) {
 			a = a.op(INC);
-			counter = counter.op(DEC);
+			b = b.op(DEC);
 		}
-		return new N(a.value, [...a.deferred, ...this.b.deferred]);
+		if (b.deferred.length > 0) {
+			return a.op(ADD, b);
+		}
+		return a;
 	}
 }
 
@@ -130,12 +136,15 @@ export class SUB extends OP {
 	}
 
 	public execute(a: N): N {
-		let counter = this.b;
-		while (counter.value > 0n) {
+		let b = this.b;
+		while (b.value > 0n) {
 			a = a.op(DEC);
-			counter = counter.op(DEC);
+			b = b.op(DEC);
 		}
-		return new N(a.value, [...a.deferred, ...this.b.deferred]);
+		if (b.deferred.length > 0) {
+			return a.op(ADD, b);
+		}
+		return a;
 	}
 }
 
@@ -171,26 +180,17 @@ export class DIV extends OP {
 	}
 
 	public execute(a: N): N {
-		if (a.deferred.length > 0) {
-			return new N(a.value, [this]);
-		}
-		if (this.b.deferred.length > 0) {
-			return new N(a.value, [this]);
-		}
-
+		const b = this.b;
 		let quotient = ZERO();
 		let remainder = a;
-		while (remainder.value >= this.b.value && this.b.value > 0n) {
-			remainder = remainder.op(SUB, this.b);
+		while (remainder.value >= b.value && b.value > 0n) {
+			remainder = remainder.op(SUB, b);
 			quotient = quotient.op(INC);
 		}
 		if (remainder.value === 0n) {
 			return quotient;
 		}
-
-		// Defer: ADD the result of (remainder / b)
-		const remainderDivB = remainder.op(DIV, this.b);
-		return quotient.op(ADD, remainderDivB);
+		return quotient.op(ADD, remainder.op(DIV, this.b));
 	}
 }
 
@@ -199,8 +199,7 @@ function test(
 	n: N,
 	condition?: (n: N) => { passed: boolean; reason: string },
 ): void {
-	console.log(`${label}`);
-	console.log(`  = ${n}`);
+	console.log(`${label} => ${n}`);
 
 	// Test condition if provided
 	if (condition) {
@@ -219,11 +218,8 @@ function test(
 		const after = current.toString();
 		if (after !== original) {
 			console.error(`  ❌ UNSTABLE: After ${i + 1} evaluations, changed from "${original}" to "${after}"`);
-			return;
 		}
 	}
-
-	console.log(`  ✓ stable`);
 }
 
 if (import.meta.main) {
@@ -307,6 +303,11 @@ if (import.meta.main) {
 	}));
 
 	test("0 / 0", ZERO().op(DIV, ZERO()), (n) => ({
+		passed: n.value === 0n && n.deferred.length === 0,
+		reason: `expected 0 with no deferred, got ${n}`,
+	}));
+
+	test("0 / 5", ZERO().op(DIV, a), (n) => ({
 		passed: n.value === 0n && n.deferred.length === 0,
 		reason: `expected 0 with no deferred, got ${n}`,
 	}));
@@ -404,6 +405,11 @@ if (import.meta.main) {
 	test("(7 / 2) * 2", new N(7n).op(DIV, new N(2n)).op(MUL, new N(2n)), (n) => ({
 		passed: n.value === 7n && n.deferred.length === 0,
 		reason: `expected 7, got ${n}`,
+	}));
+
+	test("0 / 5 + 3", ZERO().op(DIV, a).op(ADD, new N(3n)), (n) => ({
+		passed: n.value === 3n && n.deferred.length === 0,
+		reason: `expected 3, got ${n}`,
 	}));
 
 	// Multiple increments/decrements
