@@ -1,139 +1,185 @@
 # Primitive Math
 
-A mathematical system built from first principles, exposing the raw computation behind arithmetic rather than hiding it
-behind notation and abstractions.
+Primitive Math is a mathematical system built from first principles. It exposes the **actual computation behind
+arithmetic**, instead of hiding it behind symbols and notation.
+
+It does not invent answers. It shows **what has been computed** and **what is still unresolved**.
 
 ## Philosophy
 
-Traditional math gives you answers like `10 / 3 = 3.333...` or `5 / 0 = undefined`. These are **notational
-conveniences** — symbols that hide what's really happening.
+Traditional mathematics relies heavily on notation that hides reality.
 
-This system strips away the abstractions and shows arithmetic for what it actually is: **operations that may or may not
-terminate**.
+When you see:
 
-| Traditional Math | What It Hides                                      |
-| ---------------- | -------------------------------------------------- |
-| `3.333...`       | An infinite process represented as a finite symbol |
-| `∞`              | "This doesn't stop" dressed up as a number         |
-| `undefined`      | "We gave up"                                       |
-| `-1`             | A decrement we couldn't apply                      |
+- `10 / 3 = 3.333...`
+- `5 / 0 = undefined`
+- `3 - 5 = -2`
 
-Here, there are no such symbols. There's only:
+you are not looking at results — you are looking at **conventions**.
 
-1. **What we've computed so far**
-2. **Work still pending**
+These symbols exist to make infinite or impossible processes look finite and complete.
+
+Primitive Math removes those conventions entirely.
+
+There are no special symbols for:
+
+- infinity
+- negative numbers
+- repeating decimals
+- undefined values
+
+There is only:
+
+1. **Work that has completed**
+2. **Work that could not be completed**
+
+Nothing else.
+
+| Traditional Math | What It Really Means                    |
+| ---------------- | --------------------------------------- |
+| `3.333...`       | An operation that never terminates      |
+| `∞`              | “This keeps going forever”              |
+| `undefined`      | “We stopped reasoning”                  |
+| `-2`             | Two decrements that couldn’t be applied |
+
+Primitive Math refuses to compress unfinished computation into symbols.
 
 ## The Primitives
 
 Everything is built from just two operations:
 
-- **INC** — Add 1
-- **DEC** — Subtract 1 (if possible; otherwise, defer)
+- **INC** — increment by 1
+- **DEC** — decrement by 1 (if possible)
 
-That's it. Everything else emerges from these.
+If a decrement cannot be applied, it is **deferred**, not discarded.
+
+That’s the entire system.
 
 ## Derived Operations
 
-| Operation | Definition                                          |
-| --------- | --------------------------------------------------- |
-| `ADD(b)`  | Increment `a` while decrementing `b` until `b` is 0 |
-| `SUB(b)`  | Decrement both `a` and `b` until `b` is 0           |
-| `MUL(b)`  | Repeated addition                                   |
-| `DIV(b)`  | Repeated subtraction                                |
+All arithmetic emerges from combinations of INC and DEC:
+
+| Operation | Meaning                                                     |
+| --------- | ----------------------------------------------------------- |
+| `ADD(b)`  | Increment `a` while decrementing `b` until `b` reaches zero |
+| `SUB(b)`  | Decrement both `a` and `b` until `b` reaches zero           |
+| `MUL(b)`  | Repeated addition                                           |
+| `DIV(b)`  | Repeated subtraction                                        |
+
+There are no shortcuts and no special cases.
 
 ## Deferred Operations
 
-When an operation can't complete, it doesn't fail — it **defers**.
+When an operation cannot complete, it does not fail.
 
-```typescript
-const result = new N(3n).op(SUB, new N(5n));
-console.log(result.toString()); // "0 [DEC, DEC]"
+It defers.
+
+```ts
+new N(3n).op(SUB, new N(5n)).toString();
+// "0[DEC, DEC]"
 ```
 
-`3 - 5` doesn't equal `-2`. It equals **0 with 2 decrements we couldn't apply yet**.
+`3 - 5` does not equal `-2`.
 
-This is honest. The number `-2` is just notation for "a positive 2 that's owed." The deferred operations are the debt,
-kept explicit.
+It equals:
 
-## Division and Infinity
+- value: `0`
+- pending work: two decrements
 
-```typescript
-const result = new N(10n).op(DIV, new N(3n));
-console.log(result.toString()); // "3 [DIV(3) on 1]"
+Negative numbers are not real values — they are **unapplied work**. Primitive Math keeps that debt explicit.
+
+## Division and Non-Termination
+
+```ts
+new N(10n).op(DIV, new N(3n)).toString();
+// "3[ADD(1[DIV(3)])]"
 ```
 
-There's no `3.333...` here. There's a quotient (3) and unfinished work (divide the remainder of 1).
+There is no `3.333...`.
 
-The "infinite decimal" is a display format humans invented. The reality is: **the operation doesn't terminate**.
+What actually happened is:
+
+- We successfully subtracted `3` three times
+- A remainder of `1` is left
+- Dividing that remainder never terminates
+
+The repeating decimal is just a human-friendly display format. The truth is simpler: **the computation did not finish**.
 
 ### Division by Zero
 
-```typescript
-const result = new N(5n).op(DIV, ZERO());
-console.log(result.toString()); // "0 [DIV(0) on 5]"
+```ts
+new N(5n).op(DIV, ZERO()).toString();
+// "0[ADD(5[DIV(0)])]"
 ```
 
-"How many times can I subtract 0 from 5?"
+“How many times can I subtract zero from five?”
 
-Zero times. The remainder (5) is still there. The deferred `DIV(0) on 5` represents an infinite sequence of zeros:
-`0.0000...`
+Zero times.
 
-This isn't undefined — it's a computation that never finishes. Just like `10 / 3`, except the digits are all zeros.
+The remainder is still `5`, and the division will never progress. This is not “undefined” — it is a computation that
+cannot advance.
+
+Just like `10 / 3`, except the remainder never shrinks.
 
 ## Usage
 
-```typescript
+```ts
 import { ADD, DEC, DIV, INC, MUL, N, ONE, SUB, ZERO } from "./main.ts";
 
-// Basic operations
 const a = new N(5n);
 const b = new N(3n);
 
-a.op(new INC()); // 6
-a.op(new DEC()); // 4
+a.op(INC); // 6
+a.op(DEC); // 4
 a.op(ADD, b); // 8
 a.op(SUB, b); // 2
 a.op(MUL, b); // 15
-a.op(DIV, b); // 1 [DIV(3) on 2]
+a.op(DIV, b); // 1[ADD(2[DIV(3)])]
 
 // Chaining
-new N(2n).op(ADD, new N(3n)).op(MUL, new N(2n)); // (2 + 3) * 2 = 10
+new N(2n).op(ADD, new N(3n)).op(MUL, new N(2n)); // 10
 
-// toString() shows value and pending work
-console.log(a.op(DIV, b).toString()); // "1 [DIV(3) on 2]"
-console.log(new N(3n).op(SUB, new N(5n)).toString()); // "0 [DEC, DEC]"
-console.log(new N(12n).op(DIV, new N(4n)).toString()); // "3"
-
-// Check for incomplete computation
-const result = a.op(DIV, b);
-if (result.deferred.length > 0) {
-	console.log("Computation has pending work");
+// Inspect unfinished computation
+const r = a.op(DIV, b);
+if (r.deferred.length > 0) {
+	console.log("Computation is incomplete");
 }
 ```
 
-## Run
+`toString()` shows exactly what exists:
 
-```bash
-deno run main.ts
-```
+- the computed value
+- the remaining work
+
+Nothing is hidden.
 
 ## The Point
 
-Mathematics is full of abstractions that make infinite or impossible things look finite and resolved:
+Mathematics is full of **useful lies**:
 
 - Repeating decimals
-- Infinity symbols
 - Negative numbers
-- "Undefined"
-- Decimal fractions like `1.5`
+- Fractions like `1.5`
+- Infinity symbols
+- “Undefined”
 
-These are **useful lies**. They let us write things down and move on.
+They are not wrong — they are **compressions**. They let humans write answers without carrying infinite processes
+around.
 
-There is no such thing as `1.5`. The `.5` is notation for a deferred operation — it's `1` with `DIV(2)` pending on a
-remainder of `1`. We just invented syntax to hide the incomplete computation.
+Primitive Math does the opposite.
 
-This system refuses to lie. It shows you exactly what's been computed and what hasn't. The deferred operations are the
-honest truth — not a symbol pretending the work is done.
+There is no `1.5`.
 
-**Traditional math:** "Here's the answer: 3.333..."\
-**Primitive math:** "Here's what I computed, and here's the work still pending."
+There is `1` with a pending division by `2`.
+
+There is no `-2`.
+
+There are two decrements that could not be applied.
+
+There is no infinity.
+
+There is only work that never finishes.
+
+**Traditional math:** “Here’s the answer.” **Primitive math:** “Here’s what completed — and here’s what didn’t.”
+
+And that honesty is the whole point.
