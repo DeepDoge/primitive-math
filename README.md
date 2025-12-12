@@ -1,9 +1,13 @@
 # Primitive Math
 
 Primitive Math is a mathematical system built from first principles. It exposes the **actual computation behind
-arithmetic**, instead of hiding it behind symbols and notation.
+arithmetic**, instead of hiding it behind symbols, notation, and limits.
 
 It does not invent answers. It shows **what has been computed** and **what is still unresolved**.
+
+Nothing more. Nothing less.
+
+---
 
 ## Philosophy
 
@@ -14,10 +18,11 @@ When you see:
 - `10 / 3 = 3.333...`
 - `5 / 0 = undefined`
 - `3 - 5 = -2`
+- `1.999... = 2`
 
 you are not looking at results — you are looking at **conventions**.
 
-These symbols exist to make infinite or impossible processes look finite and complete.
+These symbols exist to compress infinite or impossible processes into something finite and convenient.
 
 Primitive Math removes those conventions entirely.
 
@@ -27,22 +32,44 @@ There are no special symbols for:
 - negative numbers
 - repeating decimals
 - undefined values
+- limits pretending work has finished
 
 There is only:
 
 1. **Work that has completed**
 2. **Work that could not be completed**
 
-Nothing else.
+Nothing else exists.
 
-| Traditional Math | What It Really Means                    |
-| ---------------- | --------------------------------------- |
-| `3.333...`       | An operation that never terminates      |
-| `∞`              | “This keeps going forever”              |
-| `undefined`      | “We stopped reasoning”                  |
-| `-2`             | Two decrements that couldn’t be applied |
+| Traditional Math | What It Really Means                          |
+| ---------------- | --------------------------------------------- |
+| `3.333...`       | An operation that never terminates            |
+| `1.999... = 2`   | Two different processes treated as equivalent |
+| `∞`              | “This keeps going forever”                    |
+| `undefined`      | “We stopped reasoning”                        |
+| `-2`             | Two decrements that couldn’t be applied       |
 
 Primitive Math refuses to compress unfinished computation into symbols.
+
+---
+
+## The Core Disagreement
+
+Primitive Math exists to end a very specific kind of debate.
+
+Is:
+
+- `1.999...` **actually** equal to `2`?
+- Division by zero **fundamentally different** from `10 / 3`?
+- A negative number a real value, or bookkeeping?
+
+Traditional math answers these by **changing the rules of equality** and **introducing abstractions**.
+
+Primitive Math answers by refusing to forget the underlying operations.
+
+If two computations are different, they remain different — even if humans decide to treat them as equivalent later.
+
+---
 
 ## The Primitives
 
@@ -54,6 +81,10 @@ Everything is built from just two operations:
 If a decrement cannot be applied, it is **deferred**, not discarded.
 
 That’s the entire system.
+
+There are no hidden operators. There is no algebra underneath. There is no symbolic shortcut.
+
+---
 
 ## Derived Operations
 
@@ -67,6 +98,10 @@ All arithmetic emerges from combinations of INC and DEC:
 | `DIV(b)`  | Repeated subtraction                                        |
 
 There are no shortcuts and no special cases.
+
+Every operation either finishes or leaves work behind.
+
+---
 
 ## Deferred Operations
 
@@ -86,7 +121,11 @@ It equals:
 - value: `0`
 - pending work: two decrements
 
-Negative numbers are not real values — they are **unapplied work**. Primitive Math keeps that debt explicit.
+Negative numbers are not real values. They are **unapplied work**.
+
+Primitive Math keeps that debt explicit instead of inventing a new number system to hide it.
+
+---
 
 ## Division and Non-Termination
 
@@ -103,7 +142,11 @@ What actually happened is:
 - A remainder of `1` is left
 - Dividing that remainder never terminates
 
-The repeating decimal is just a human-friendly display format. The truth is simpler: **the computation did not finish**.
+Repeating decimals are not numbers. They are **non-terminating processes written as if they were values**.
+
+Primitive Math does not perform that compression.
+
+---
 
 ### Division by Zero
 
@@ -116,10 +159,23 @@ new N(5n).op(DIV, ZERO()).toString();
 
 Zero times.
 
-The remainder is still `5`, and the division will never progress. This is not “undefined” — it is a computation that
-cannot advance.
+The remainder is still `5`, and the division will never progress.
 
-Just like `10 / 3`, except the remainder never shrinks.
+This is not “undefined”.
+
+It is the **same class of phenomenon** as `10 / 3`:
+
+- the computation does not finish
+- the process does not advance
+- unfinished work remains
+
+The only difference is that in `10 / 3`, the remainder shrinks — and in division by zero, it does not.
+
+Traditional math treats one as acceptable and the other as forbidden.
+
+Primitive Math treats both as **honest non-termination**.
+
+---
 
 ## Usage
 
@@ -151,7 +207,23 @@ if (r.deferred.length > 0) {
 - the computed value
 - the remaining work
 
-Nothing is hidden.
+Nothing is hidden. Nothing is assumed complete.
+
+---
+
+## About Equality
+
+Primitive Math deliberately avoids collapsing different computations into the same value.
+
+`1.999...` and `2` may be _treated_ as equal in traditional math.
+
+They are **not the same computation**.
+
+Primitive Math preserves that distinction.
+
+Equivalence is a _choice_. Computation is a _fact_.
+
+---
 
 ## The Point
 
@@ -163,8 +235,9 @@ Mathematics is full of **useful lies**:
 - Infinity symbols
 - “Undefined”
 
-They are not wrong — they are **compressions**. They let humans write answers without carrying infinite processes
-around.
+They are not wrong.
+
+They are **compressions** — abstractions layered on top of unfinished computation so humans can stop thinking about it.
 
 Primitive Math does the opposite.
 
@@ -178,8 +251,8 @@ There are two decrements that could not be applied.
 
 There is no infinity.
 
-There is only work that never finishes.
+There is only work that finished — and work that never does.
 
-**Traditional math:** “Here’s the answer.” **Primitive math:** “Here’s what completed — and here’s what didn’t.”
+**Traditional math:** “Here’s the answer.” **Primitive Math:** “Here’s what completed — and here’s what didn’t.”
 
-And that honesty is the whole point.
+That honesty is the whole point.
