@@ -48,6 +48,7 @@ export class N {
 
 		// evaluate deferred operations first
 		let n = this as N;
+		// TODO: evaluate
 
 		// now execute the current operation
 		const result = operation.execute(n);
